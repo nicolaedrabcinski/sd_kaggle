@@ -168,11 +168,6 @@ Baseline și experimente inițiale în curs de desfășurare.
 - Production deployment
 - Model interpretability analysis
 
-## Prezentare
-
-Prezentarea finală se găsește în `presentation/`:
-- `presentation.md` - Marp source
-- `presentation.pdf` - Export PDF
 
 ## Autor
 
