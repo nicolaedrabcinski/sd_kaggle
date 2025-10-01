@@ -1,0 +1,157 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Data files (large datasets)
+data/train.csv
+data/test.csv
+data/train_labels.csv
+data/lagged_test_labels/*.csv
+
+# Keep structure but ignore large files
+!data/.gitkeep
+!data/lagged_test_labels/.gitkeep
+
+# Model checkpoints and weights
+models/*.pth
+models/*.pt
+models/*.h5
+models/*.pkl
+models/checkpoints/
+models/final/*.pth
+models/final/*.pt
+
+# Keep directory structure
+!models/.gitkeep
+!models/checkpoints/.gitkeep
+!models/final/.gitkeep
+
+# Outputs
+outputs/predictions/*.csv
+outputs/submissions/*.csv
+outputs/logs/*.log
+outputs/*.png
+outputs/*.jpg
+outputs/*.pdf
+
+# Keep structure
+!outputs/.gitkeep
+!outputs/predictions/.gitkeep
+!outputs/submissions/.gitkeep
+!outputs/logs/.gitkeep
+
+# Experiment tracking
+wandb/
+.wandb/
+mlruns/
+runs/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Kaggle
+kaggle.json
+
+# Temporary files
+*.swp
+*.swo
+*~
+.tmp/
+tmp/
+
+# PyTorch
+*.pth.tar
+
+# TensorBoard
+events.out.tfevents.*
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Presentation outputs (keep source, ignore generated)
+presentation/*.html
+# presentation/*.pdf  # Remove this line if you want to keep PDFs in git
+
+# Jupyter execution
+*.nbconvert.ipynb
+
+# Large files marker
+*.large
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Package manager
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# Node (if using any JS tools)
+node_modules/
+package-lock.json
+
+# Documentation builds
+docs/_build/
+site/
+
+# Local configuration
+config.local.yaml
+*.local.yaml
+
+# Profiling
+*.prof
