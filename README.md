@@ -1,195 +1,68 @@
-```markdown
-# MITSUI Commodity Prediction Challenge
+# MITSUI Commodity Prediction
 
-Deep Learning pentru predicția prețurilor mărfurilor - MITSUI&CO. Kaggle Competition
+Time series forecasting для 424 финансовых инструментов (металлы, акции, forex) используя современные Deep Learning модели.
 
-## Despre Proiect
-
-Proiect de Data Science pentru competiția Kaggle MITSUI&CO. Commodity Prediction Challenge. Scopul este predicția log returns pentru 424 instrumente financiare (metale, acțiuni, forex) folosind Deep Learning.
-
-- **Competiție:** MITSUI Commodity Prediction Challenge
-- **Premiu:** $100,000 USD
-- **Participanți:** 1,501 echipe
-- **Deadline:** 6 Octombrie 2025
-
-## Quick Start
+## Setup
 
 ```bash
-# Clone repository
 git clone git@github.com:nicolaedrabcinski/sd_kaggle.git
 cd sd_kaggle
-
-# Setup environment
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
-uv venv
-source .venv/bin/activate
 
 # Install dependencies
 uv pip install -r requirements.txt
 
-# Download data from Kaggle
-kaggle competitions download -c mitsui-commodity-prediction-challenge -p data/
-cd data && unzip mitsui-commodity-prediction-challenge.zip && rm *.zip && cd ..
-
-# Run exploratory data analysis
-jupyter notebook notebooks/01_eda.ipynb
+# Download data
+kaggle competitions download -c mitsui-commodity-prediction-challenge -p data/raw/
 ```
 
-## Structura Proiectului
+## Models
+
+- **DLinear/NLinear** - Fast baselines
+- **PatchTST** - Transformer для временных рядов
+- **N-HiTS** - Hierarchical interpolation (SOTA)
+- **TimesNet** - Multi-periodicity modeling
+- **CNN Attention** - Multi-scale convolutions
+
+## Usage
+
+```bash
+# Preprocess data (add technical indicators)
+python scripts/preprocess.py
+
+# Train single model
+python scripts/train.py --model dlinear
+
+# Train all models
+python scripts/train.py --all
+
+# Hyperparameter optimization
+python scripts/optimize.py --model patchtst --trials 50
+
+# Compare results
+python scripts/train.py --compare
+```
+
+## Structure
 
 ```
-sd_kaggle/
-├── data/                      # Date competiție
-│   ├── train.csv
-│   ├── test.csv
-│   ├── train_labels.csv
-│   ├── target_pairs.csv
-│   └── lagged_test_labels/
-├── notebooks/                 # Jupyter notebooks
-│   └── 01_eda.ipynb
-├── src/                       # Source code
-│   ├── data/
-│   ├── features/
-│   ├── models/
-│   └── training/
-├── models/                    # Model checkpoints
-├── outputs/                   # Rezultate
-├── presentation/              # Prezentare finală
-└── requirements.txt
+├── data/           # Kaggle competition data (not in git)
+├── models/         # Saved checkpoints (not in git)
+├── notebooks/      # EDA and analysis
+├── scripts/        # Training scripts
+└── src/
+    ├── data/       # Data loading
+    ├── models/     # Model implementations
+    └── training/   # Training logic
 ```
 
-## Date și Features
+## Stack
 
-### Dataset Overview
+- PyTorch 2.0+
+- Optuna (hyperparameter optimization)
+- pandas, numpy, scikit-learn
 
-- **Train:** aproximativ 2,500 rânduri × 150 time series
-- **Targets:** 424 log returns
-- **Horizons:** 1-4 zile predicție
-- **Markets:** LME (metale), JPX (Japonia), US (acțiuni), FX (forex)
+## Author
 
-### Feature Engineering (în lucru)
-
-- Technical Indicators: SMA, EMA, RSI, MACD, Bollinger Bands, ATR
-- Statistical Features: Rolling mean/std, lags, volatility
-- Cross-Instrument: Correlații, spread-uri, ratios
-- Time-based: Day of week, calendar effects
-
-## Modele Planificate
-
-### 1. LSTM Attention
-- Bidirectional LSTM
-- Multi-head attention
-- Dropout regularization
-
-### 2. Temporal Fusion Transformer
-- Variable selection network
-- Temporal attention
-- Quantile outputs
-
-### 3. CNN-LSTM Hybrid
-- 1D CNN pentru patterns
-- LSTM pentru dependencies
-- Residual connections
-
-### 4. Ensemble
-- Weighted average
-- Grid search optimization
-
-## Rezultate Preliminare
-
-**Status:** În dezvoltare
-
-Baseline și experimente inițiale în curs de desfășurare.
-
-## Tehnologii Utilizate
-
-### Core Stack
-- Python 3.10
-- PyTorch 2.0
-- PyTorch Lightning 2.0
-- NumPy 1.24, Pandas 2.0
-- Scikit-learn 1.3
-
-### Feature Engineering
-- TA-Lib
-- pandas-ta
-- scipy 1.11
-
-### Visualization & Tracking
-- matplotlib, seaborn, plotly
-- Weights & Biases
-- TensorBoard
-
-### Development
-- uv (package manager)
-- Jupyter Notebook
-- Kaggle API
-
-### Infrastructure
-- GPU: NVIDIA RTX 3090
-- RAM: 32GB
-
-## Training Strategy (planificat)
-
-### Preprocessing
-- StandardScaler normalization
-- 60-day lookback window
-- Walk-forward validation
-
-### Configuration
-- Optimizer: Adam
-- Loss: Huber Loss
-- Validation: TimeSeriesSplit (5 folds)
-- Early stopping
-
-## Timeline Proiect
-
-- **Săptămâna 1:** Setup, EDA - Complet
-- **Săptămâna 2-3:** Feature engineering - În progres
-- **Săptămâna 4:** Baseline models
-- **Săptămâna 5-7:** Deep Learning models
-- **Săptămâna 8-9:** Optimization, ensemble
-- **Săptămâna 10:** Validation, testing
-- **Săptămâna 11:** Final submission
-
-**Progres actual:** aproximativ 25% (Faza 2-3)
-
-## Direcții Viitoare
-
-### Pentru competiție
-- Advanced feature engineering
-- Model implementation și training
-- Hyperparameter optimization
-- Ensemble refinement
-
-### După competiție
-- JAX/Flax implementation
-- Production deployment
-- Model interpretability analysis
-
-
-## Autor
-
-**Nicolae Drabcinski**  
-Grupa SD-241M  
-Universitatea Tehnică a Moldovei - Facultatea FCIM
-
-- Email: drabcinski@gmail.com
-- GitHub: nicolaedrabcinski
-- Kaggle: nickdrabcinski
-
-## Proiect Academic
-
-Proiect realizat în cadrul cursului "Știința Datelor"  
-2025
-
-## Note
-
-- Datele nu sunt incluse în repository (prea mari)
-- Model checkpoints nu sunt incluse
-- Pentru rulare: descarcă datele de pe Kaggle
-
-## License
-
-Proiect educațional pentru Kaggle competition.
+Nicolae Drabcinski  
+UTM FCIM, SD-241M  
+drabcinski@gmail.com
