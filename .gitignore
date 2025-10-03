@@ -38,24 +38,20 @@ ENV/
 .ipynb_checkpoints
 *.ipynb_checkpoints/
 
-# Data
-data/
-data/raw/*.csv
-data/raw/*.zip
-data/processed/*.csv
+# Data files (CSV are too large)
+*.csv
+*.zip
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# Models
-models/saved/**/*.pth
-models/saved/**/*.pt
-models/artifacts/**/*.pkl
-!models/saved/.gitkeep
+# Models (generated during training)
+models/**/*.pth
+models/**/*.pt
+models/**/*.pkl
+!models/.gitkeep
 
 # Outputs
-outputs/experiments/**/
-outputs/predictions/*.csv
-outputs/metrics/*.json
+outputs/**/*
 !outputs/.gitkeep
 
 # Logs
@@ -77,12 +73,6 @@ dmypy.json
 # Environment
 .env
 .env.local
-*.env
-
-# Hydra
-outputs/
-multirun/
-.hydra/
 
 # MacOS
 .DS_Store
@@ -92,10 +82,4 @@ multirun/
 # Temporary
 *.tmp
 *.bak
-*.swp
 .cache/
-# Models are generated during training - don't commit
-models/checkpoints/**/*
-models/quick_test/**/*
-models/scalers/**/*.pkl
-!models/.gitkeep
