@@ -94,3 +94,8 @@ multirun/
 *.bak
 *.swp
 .cache/
+# Models are generated during training - don't commit
+models/checkpoints/**/*
+models/quick_test/**/*
+models/scalers/**/*.pkl
+!models/.gitkeep
