@@ -8,9 +8,11 @@ from typing import Dict
 import time
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
+
 
 class Trainer:
-    """Trainer for commodity prediction models"""
+    """Trainer for commodity prediction models with progress tracking"""
     
     def __init__(
         self,
@@ -54,11 +56,20 @@ class Trainer:
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
     
-    def train_epoch(self) -> float:
+    def train_epoch(self, epoch: int, num_epochs: int) -> float:
+        """Train for one epoch with progress bar"""
         self.model.train()
         total_loss = 0
         
-        for batch_idx, (x, y) in enumerate(self.train_loader):
+        # Progress bar for batches
+        pbar = tqdm(
+            self.train_loader, 
+            desc=f'Epoch {epoch}/{num_epochs} [Train]',
+            leave=False,
+            ncols=120
+        )
+        
+        for batch_idx, (x, y) in enumerate(pbar):
             x, y = x.to(self.device), y.to(self.device)
             
             self.optimizer.zero_grad()
@@ -70,20 +81,34 @@ class Trainer:
             self.optimizer.step()
             
             total_loss += loss.item()
+            avg_loss = total_loss / (batch_idx + 1)
             
-            if (batch_idx + 1) % 10 == 0:
-                print(f"  Batch {batch_idx + 1}/{len(self.train_loader)}, Loss: {loss.item():.6f}")
+            # Update progress bar with current metrics
+            pbar.set_postfix({
+                'loss': f'{loss.item():.6f}',
+                'avg_loss': f'{avg_loss:.6f}',
+                'lr': f'{self.optimizer.param_groups[0]["lr"]:.2e}'
+            })
         
         return total_loss / len(self.train_loader)
     
-    def validate(self) -> Dict[str, float]:
+    def validate(self, epoch: int, num_epochs: int) -> Dict[str, float]:
+        """Validate with progress bar"""
         self.model.eval()
         total_loss = 0
         all_predictions = []
         all_targets = []
         
+        # Progress bar for validation
+        pbar = tqdm(
+            self.val_loader,
+            desc=f'Epoch {epoch}/{num_epochs} [Val]',
+            leave=False,
+            ncols=120
+        )
+        
         with torch.no_grad():
-            for x, y in self.val_loader:
+            for batch_idx, (x, y) in enumerate(pbar):
                 x, y = x.to(self.device), y.to(self.device)
                 predictions = self.model(x)
                 loss = self.criterion(predictions, y)
@@ -91,6 +116,9 @@ class Trainer:
                 total_loss += loss.item()
                 all_predictions.append(predictions.cpu().numpy())
                 all_targets.append(y.cpu().numpy())
+                
+                avg_loss = total_loss / (batch_idx + 1)
+                pbar.set_postfix({'val_loss': f'{avg_loss:.6f}'})
         
         all_predictions = np.concatenate(all_predictions, axis=0)
         all_targets = np.concatenate(all_targets, axis=0)
@@ -102,7 +130,7 @@ class Trainer:
         
         ss_res = np.sum((all_targets - all_predictions) ** 2)
         ss_tot = np.sum((all_targets - np.mean(all_targets)) ** 2)
-        r2 = 1 - (ss_res / ss_tot)
+        r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
         
         return {
             'loss': total_loss / len(self.val_loader),
@@ -117,17 +145,26 @@ class Trainer:
         early_stopping_patience: int = 10,
         save_best: bool = True
     ):
-        print(f"Starting training for {num_epochs} epochs...")
+        """Train model with progress tracking"""
+        print("=" * 80)
+        print(f"Starting training for {num_epochs} epochs")
         print(f"Device: {self.device}")
+        print(f"Early stopping patience: {early_stopping_patience}")
+        print("=" * 80)
         
         patience_counter = 0
         
-        for epoch in range(1, num_epochs + 1):
+        # Main progress bar for epochs
+        epoch_pbar = tqdm(range(1, num_epochs + 1), desc='Training Progress', ncols=120)
+        
+        for epoch in epoch_pbar:
             start_time = time.time()
             
-            print(f"\nEpoch {epoch}/{num_epochs}")
-            train_loss = self.train_epoch()
-            val_metrics = self.validate()
+            # Train
+            train_loss = self.train_epoch(epoch, num_epochs)
+            
+            # Validate
+            val_metrics = self.validate(epoch, num_epochs)
             
             # Get current learning rate
             current_lr = self.optimizer.param_groups[0]['lr']
@@ -137,22 +174,35 @@ class Trainer:
             self.scheduler.step(val_metrics['loss'])
             new_lr = self.optimizer.param_groups[0]['lr']
             
-            if new_lr != old_lr:
-                print(f"  Learning rate reduced: {old_lr:.6f} -> {new_lr:.6f}")
-            
             self.train_losses.append(train_loss)
             self.val_losses.append(val_metrics['loss'])
             
             epoch_time = time.time() - start_time
-            print(f"\nEpoch {epoch} Summary:")
-            print(f"  Train Loss: {train_loss:.6f}")
-            print(f"  Val Loss: {val_metrics['loss']:.6f}")
-            print(f"  Val RMSE: {val_metrics['rmse']:.6f}")
-            print(f"  Val MAE: {val_metrics['mae']:.6f}")
-            print(f"  Val R²: {val_metrics['r2']:.4f}")
-            print(f"  Learning Rate: {current_lr:.6f}")
-            print(f"  Time: {epoch_time:.2f}s")
             
+            # Update main progress bar
+            epoch_pbar.set_postfix({
+                'train_loss': f'{train_loss:.6f}',
+                'val_loss': f'{val_metrics["loss"]:.6f}',
+                'val_r2': f'{val_metrics["r2"]:.4f}',
+                'lr': f'{current_lr:.2e}',
+                'time': f'{epoch_time:.1f}s'
+            })
+            
+            # Print detailed summary
+            print(f"\n{'='*80}")
+            print(f"Epoch {epoch}/{num_epochs} Summary:")
+            print(f"  Train Loss: {train_loss:.6f}")
+            print(f"  Val Loss:   {val_metrics['loss']:.6f}")
+            print(f"  Val RMSE:   {val_metrics['rmse']:.6f}")
+            print(f"  Val MAE:    {val_metrics['mae']:.6f}")
+            print(f"  Val R²:     {val_metrics['r2']:.4f}")
+            print(f"  LR:         {current_lr:.6f}")
+            print(f"  Time:       {epoch_time:.2f}s")
+            
+            if new_lr != old_lr:
+                print(f"  📉 LR reduced: {old_lr:.6f} -> {new_lr:.6f}")
+            
+            # Check for improvement
             if val_metrics['loss'] < self.best_val_loss:
                 self.best_val_loss = val_metrics['loss']
                 patience_counter = 0
@@ -165,22 +215,29 @@ class Trainer:
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'val_metrics': val_metrics
                     }, save_path)
-                    print(f"  ✓ Saved best model")
+                    print(f"  ✓ New best model saved!")
             else:
                 patience_counter += 1
-                print(f"  No improvement for {patience_counter} epochs")
+                print(f"  ⏳ No improvement for {patience_counter}/{early_stopping_patience} epochs")
             
+            print("=" * 80)
+            
+            # Early stopping
             if patience_counter >= early_stopping_patience:
-                print(f"\nEarly stopping at epoch {epoch}")
+                print(f"\n🛑 Early stopping triggered at epoch {epoch}")
                 break
         
-        print(f"\nTraining completed!")
+        epoch_pbar.close()
+        
+        print("\n" + "=" * 80)
+        print("Training completed!")
         print(f"Best validation loss: {self.best_val_loss:.6f}")
+        print("=" * 80)
     
     def load_best_model(self):
+        """Load best model checkpoint"""
         checkpoint_path = self.save_dir / 'best_model.pth'
-        # Fix for PyTorch 2.6: use weights_only=False
         checkpoint = torch.load(checkpoint_path, weights_only=False)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"Loaded best model from epoch {checkpoint['epoch']}")
+        print(f"✓ Loaded best model from epoch {checkpoint['epoch']}")
         return checkpoint['val_metrics']

@@ -3,100 +3,111 @@
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from typing import Tuple, Optional
 import joblib
 from pathlib import Path
 
+
 class CommodityDataset(Dataset):
-    """Dataset for commodity price prediction"""
+    """Dataset for commodity price prediction with NO DATA LEAKAGE"""
     
     def __init__(
         self,
         data_path: str = "data/train.csv",
         labels_path: str = "data/train_labels.csv",
         lookback: int = 60,
-        scaler: Optional[StandardScaler] = None,
-        fit_scaler: bool = True
+        feature_scaler: Optional[StandardScaler] = None,
+        fit_scalers: bool = True,
+        indices: Optional[list] = None,
+        use_enhanced: bool = False
     ):
         self.lookback = lookback
         
-        # Load data
+        if use_enhanced:
+            data_path = data_path.replace('.csv', '_enhanced.csv')
+            print(f"Using enhanced data: {data_path}")
+        
+        # Load full data
         print(f"Loading data from {data_path}...")
-        self.data = pd.read_csv(data_path)
-        self.labels = pd.read_csv(labels_path)
+        data = pd.read_csv(data_path)
+        labels = pd.read_csv(labels_path)
         
-        print(f"Initial data shape: {self.data.shape}")
-        print(f"Initial labels shape: {self.labels.shape}")
+        print(f"Full data shape: {data.shape}")
+        print(f"Full labels shape: {labels.shape}")
         
-        # Check for NaN/Inf
-        print(f"NaN in data: {self.data.isna().sum().sum()}")
-        print(f"NaN in labels: {self.labels.isna().sum().sum()}")
+        # CRITICAL FIX: Filter by indices BEFORE merging
+        if indices is not None:
+            print(f"Filtering to {len(indices)} indices...")
+            data = data.iloc[indices].reset_index(drop=True)
+            labels = labels.iloc[indices].reset_index(drop=True)
         
-        # Handle NaN in data - fill with forward fill then backward fill
-        feature_cols_initial = [col for col in self.data.columns if col != 'date_id']
-        self.data[feature_cols_initial] = self.data[feature_cols_initial].fillna(method='ffill').fillna(method='bfill').fillna(0)
-        
-        # Handle NaN in labels - fill with 0 (neutral return)
-        target_cols_initial = [col for col in self.labels.columns if col.startswith('target_')]
-        self.labels[target_cols_initial] = self.labels[target_cols_initial].fillna(0)
-        
-        # Replace inf with large finite values
-        self.data = self.data.replace([np.inf, -np.inf], [1e10, -1e10])
-        self.labels = self.labels.replace([np.inf, -np.inf], [1e10, -1e10])
-        
-        print(f"After cleaning - NaN in data: {self.data.isna().sum().sum()}")
-        print(f"After cleaning - NaN in labels: {self.labels.isna().sum().sum()}")
-        
-        # Merge
-        self.df = self.data.merge(self.labels, on='date_id', how='inner')
-        print(f"Merged shape: {self.df.shape}")
+        # Now merge only the filtered data
+        self.df = data.merge(labels, on='date_id', how='inner')
+        print(f"Merged data shape: {self.df.shape}")
         
         # Get columns
-        self.feature_cols = [col for col in self.data.columns if col != 'date_id']
-        self.target_cols = [col for col in self.labels.columns if col.startswith('target_')]
+        self.feature_cols = [col for col in data.columns if col != 'date_id']
+        self.target_cols = [col for col in labels.columns if col.startswith('target_')]
         
+        # Handle missing values
+        self.df[self.feature_cols] = self.df[self.feature_cols].fillna(method='ffill').fillna(method='bfill')
+        self.df[self.target_cols] = self.df[self.target_cols].fillna(method='ffill')
+        
+        # Drop rows with NaN targets
+        initial_len = len(self.df)
+        self.df = self.df.dropna(subset=self.target_cols)
+        if len(self.df) < initial_len:
+            print(f"Dropped {initial_len - len(self.df)} rows with NaN targets")
+        
+        print(f"Final data shape: {self.df.shape}")
         print(f"Features: {len(self.feature_cols)}")
         print(f"Targets: {len(self.target_cols)}")
-        print(f"Total samples: {len(self.df)}")
         
-        # Prepare arrays
+        # Extract arrays
         self.features = self.df[self.feature_cols].values.astype(np.float32)
         self.targets = self.df[self.target_cols].values.astype(np.float32)
         
-        # Final check for NaN/Inf
-        if np.any(np.isnan(self.features)) or np.any(np.isinf(self.features)):
-            print("WARNING: NaN/Inf still present in features after cleaning!")
-            self.features = np.nan_to_num(self.features, nan=0.0, posinf=1e10, neginf=-1e10)
-        
-        if np.any(np.isnan(self.targets)) or np.any(np.isinf(self.targets)):
-            print("WARNING: NaN/Inf still present in targets after cleaning!")
-            self.targets = np.nan_to_num(self.targets, nan=0.0, posinf=1e10, neginf=-1e10)
+        # Replace inf/nan
+        self.features = np.nan_to_num(self.features, nan=0.0, posinf=1e10, neginf=-1e10)
+        self.targets = np.nan_to_num(self.targets, nan=0.0, posinf=0.1, neginf=-0.1)
         
         # Normalize features
-        if scaler is None:
-            self.scaler = StandardScaler()
-            if fit_scaler:
-                self.features = self.scaler.fit_transform(self.features)
+        if feature_scaler is None:
+            self.feature_scaler = StandardScaler()
+            if fit_scalers:
+                self.features = self.feature_scaler.fit_transform(self.features)
                 print(f"Features normalized - mean: {self.features.mean():.4f}, std: {self.features.std():.4f}")
         else:
-            self.scaler = scaler
-            self.features = self.scaler.transform(self.features)
+            self.feature_scaler = feature_scaler
+            self.features = self.feature_scaler.transform(self.features)
+            print(f"Features transformed using provided scaler")
         
-        # Final check after normalization
-        if np.any(np.isnan(self.features)):
-            print("ERROR: NaN in features after normalization!")
-            self.features = np.nan_to_num(self.features, nan=0.0)
+        # DON'T normalize targets - they are log returns
+        self.target_scaler = None
+        print(f"\nTarget statistics (raw log returns):")
+        print(f"  Range: [{self.targets.min():.6f}, {self.targets.max():.6f}]")
+        print(f"  Mean: {self.targets.mean():.6f}")
+        print(f"  Std: {self.targets.std():.6f}")
+        print(f"  Median: {np.median(self.targets):.6f}")
+        
+        # Check if targets look reasonable
+        if abs(self.targets.mean()) > 0.01:
+            print(f"  WARNING: Mean target is large ({self.targets.mean():.6f}), expected ~0")
+        if self.targets.std() > 0.1:
+            print(f"  WARNING: Std is large ({self.targets.std():.6f}), expected < 0.05")
         
         # Create sequences
         self.sequences, self.sequence_targets = self._create_sequences()
         print(f"Created {len(self.sequences)} sequences")
         
-        # Final validation
+        # Validation
         assert not np.any(np.isnan(self.sequences)), "NaN in sequences!"
         assert not np.any(np.isnan(self.sequence_targets)), "NaN in targets!"
-        print("✓ Data validation passed")
+        assert not np.any(np.isinf(self.sequences)), "Inf in sequences!"
+        assert not np.any(np.isinf(self.sequence_targets)), "Inf in targets!"
+        print("Data validation passed")
     
     def _create_sequences(self) -> Tuple[np.ndarray, np.ndarray]:
         sequences = []
@@ -116,65 +127,99 @@ class CommodityDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         sequence = torch.from_numpy(self.sequences[idx])
         target = torch.from_numpy(self.sequence_targets[idx])
-        
-        # Safety check
-        if torch.isnan(sequence).any() or torch.isnan(target).any():
-            print(f"WARNING: NaN in batch at index {idx}")
-            sequence = torch.nan_to_num(sequence, nan=0.0)
-            target = torch.nan_to_num(target, nan=0.0)
-        
         return sequence, target
     
-    def save_scaler(self, path: str = "models/scaler.pkl"):
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.scaler, path)
-        print(f"Scaler saved to {path}")
+    def save_scalers(self, feature_path: str = "models/feature_scaler.pkl"):
+        Path(feature_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.feature_scaler, feature_path)
+        print(f"Feature scaler saved to {feature_path}")
 
 
 def create_dataloaders(
     train_ratio: float = 0.7,
     val_ratio: float = 0.15,
-    batch_size: int = 64,
+    batch_size: int = 32,
     lookback: int = 60,
-    num_workers: int = 4
+    num_workers: int = 4,
+    use_enhanced: bool = False
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    """Create train/val/test dataloaders with NO DATA LEAKAGE"""
     
-    # Load full dataset
-    full_dataset = CommodityDataset(
-        data_path="data/train.csv",
-        labels_path="data/train_labels.csv",
-        lookback=lookback,
-        fit_scaler=True
-    )
+    data_file = "data/train_enhanced.csv" if use_enhanced else "data/train.csv"
     
-    # Save scaler
-    full_dataset.save_scaler("models/scaler.pkl")
+    # Load data to determine split
+    print(f"Loading data for splitting from {data_file}...")
+    data = pd.read_csv(data_file)
+    labels = pd.read_csv("data/train_labels.csv")
     
-    # Calculate splits
-    total_len = len(full_dataset)
+    # Merge to get valid length
+    df = data.merge(labels, on='date_id', how='inner')
+    target_cols = [col for col in labels.columns if col.startswith('target_')]
+    df[target_cols] = df[target_cols].fillna(method='ffill')
+    df = df.dropna(subset=target_cols)
+    
+    # Calculate split indices (TEMPORAL)
+    total_len = len(df)
     train_size = int(total_len * train_ratio)
     val_size = int(total_len * val_ratio)
     
-    print(f"\nDataset splits:")
-    print(f"Train: {train_size} samples ({train_ratio*100:.1f}%)")
-    print(f"Val: {val_size} samples ({val_ratio*100:.1f}%)")
-    print(f"Test: {total_len - train_size - val_size} samples")
-    
-    # Create indices
     train_indices = list(range(0, train_size))
     val_indices = list(range(train_size, train_size + val_size))
     test_indices = list(range(train_size + val_size, total_len))
     
-    # Create subsets
-    train_dataset = Subset(full_dataset, train_indices)
-    val_dataset = Subset(full_dataset, val_indices)
-    test_dataset = Subset(full_dataset, test_indices)
+    print(f"\nDataset splits (TEMPORAL):")
+    print(f"Train: {len(train_indices)} samples ({train_ratio*100:.1f}%)")
+    print(f"Val: {len(val_indices)} samples ({val_ratio*100:.1f}%)")
+    print(f"Test: {len(test_indices)} samples ({(1-train_ratio-val_ratio)*100:.1f}%)")
     
-    # Create dataloaders
+    # Create TRAIN dataset - fit scalers ONLY on train
+    print("\n" + "="*80)
+    print("Creating TRAIN dataset...")
+    print("="*80)
+    train_dataset = CommodityDataset(
+        data_path=data_file,
+        labels_path="data/train_labels.csv",
+        lookback=lookback,
+        feature_scaler=None,
+        fit_scalers=True,
+        indices=train_indices,
+        use_enhanced=use_enhanced
+    )
+    train_dataset.save_scalers()
+    
+    # Create VAL dataset - use train scalers
+    print("\n" + "="*80)
+    print("Creating VAL dataset...")
+    print("="*80)
+    val_dataset = CommodityDataset(
+        data_path=data_file,
+        labels_path="data/train_labels.csv",
+        lookback=lookback,
+        feature_scaler=train_dataset.feature_scaler,
+        fit_scalers=False,
+        indices=val_indices,
+        use_enhanced=use_enhanced
+    )
+    
+    # Create TEST dataset - use train scalers
+    print("\n" + "="*80)
+    print("Creating TEST dataset...")
+    print("="*80)
+    test_dataset = CommodityDataset(
+        data_path=data_file,
+        labels_path="data/train_labels.csv",
+        lookback=lookback,
+        feature_scaler=train_dataset.feature_scaler,
+        fit_scalers=False,
+        indices=test_indices,
+        use_enhanced=use_enhanced
+    )
+    
+    # Create dataloaders (NO SHUFFLE for temporal data)
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=True
     )
