@@ -83,3 +83,5 @@ dmypy.json
 *.tmp
 *.bak
 .cache/
+# Kaggle evaluation files
+data/external/
