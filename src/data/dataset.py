@@ -61,15 +61,15 @@ class CommodityDataset(Dataset):
         self.feature_cols = [col for col in data.columns if col != 'date_id']
         self.target_cols = [col for col in labels.columns if col.startswith('target_')]
         
-        # Handle missing values
+        # Handle missing values in features ONLY
         self.df[self.feature_cols] = self.df[self.feature_cols].ffill().bfill()
-        self.df[self.target_cols] = self.df[self.target_cols].ffill()
         
-        # Drop rows with NaN targets
+        # CRITICAL: DO NOT ffill targets - drop rows with NaN targets instead
         initial_len = len(self.df)
         self.df = self.df.dropna(subset=self.target_cols)
         if len(self.df) < initial_len:
-            print(f"Dropped {initial_len - len(self.df)} rows with NaN targets")
+            dropped = initial_len - len(self.df)
+            print(f"Dropped {dropped} rows with NaN targets ({dropped/initial_len*100:.1f}%)")
         
         print(f"Final data shape: {self.df.shape}")
         print(f"Features: {len(self.feature_cols)}")
@@ -79,9 +79,8 @@ class CommodityDataset(Dataset):
         self.features = self.df[self.feature_cols].values.astype(np.float32)
         self.targets = self.df[self.target_cols].values.astype(np.float32)
         
-        # Replace inf/nan
+        # Replace inf/nan in features only
         self.features = np.nan_to_num(self.features, nan=0.0, posinf=1e10, neginf=-1e10)
-        self.targets = np.nan_to_num(self.targets, nan=0.0, posinf=0.1, neginf=-0.1)
         
         # Normalize features
         if feature_scaler is None:
@@ -185,8 +184,13 @@ def create_dataloaders(
     # Merge to get valid length
     df = data.merge(labels, on='date_id', how='inner')
     target_cols = [col for col in labels.columns if col.startswith('target_')]
-    df[target_cols] = df[target_cols].ffill()
+    
+    # CRITICAL: Drop rows with NaN targets BEFORE splitting
+    initial_len = len(df)
     df = df.dropna(subset=target_cols)
+    dropped = initial_len - len(df)
+    if dropped > 0:
+        print(f"Dropped {dropped} rows with NaN targets ({dropped/initial_len*100:.1f}%)")
     
     # Calculate split indices (TEMPORAL)
     total_len = len(df)
@@ -198,6 +202,7 @@ def create_dataloaders(
     test_indices = list(range(train_size + val_size, total_len))
     
     print(f"\nDataset splits (TEMPORAL):")
+    print(f"Total clean samples: {total_len}")
     print(f"Train: {len(train_indices)} samples ({train_ratio*100:.1f}%)")
     print(f"Val: {len(val_indices)} samples ({val_ratio*100:.1f}%)")
     print(f"Test: {len(test_indices)} samples ({(1-train_ratio-val_ratio)*100:.1f}%)")
