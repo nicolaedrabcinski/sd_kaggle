@@ -15,8 +15,8 @@ def check_data():
     
     # Load data
     print("\n[1] Loading data...")
-    train = pd.read_csv('data/train.csv')
-    labels = pd.read_csv('data/train_labels.csv')
+    train = pd.read_csv('data/raw/train.csv')
+    labels = pd.read_csv('data/raw/train_labels.csv')
     
     print(f"Train shape: {train.shape}")
     print(f"Labels shape: {labels.shape}")

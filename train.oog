@@ -1,0 +1,51 @@
+nohup: ignoring input
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/nicolaedrabcinski/research/sd_kaggle/scripts/train.py", line 525, in <module>
+    train_model(model_name, args.enhanced, args.epochs, args.patience)
+  File "/home/nicolaedrabcinski/research/sd_kaggle/scripts/train.py", line 270, in train_model
+    train_loader, val_loader, test_loader = create_dataloaders(
+                                            ^^^^^^^^^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/src/data/dataset.py", line 152, in create_dataloaders
+    data = pd.read_csv(data_file)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "/home/nicolaedrabcinski/research/sd_kaggle/.venv/lib/python3.11/site-packages/pandas/io/common.py", line 873, in get_handle
+    handle = open(
+             ^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'data/train.csv'
+Training ALL models sequentially...
+
+
+================================================================================
+Starting: dlinear
+================================================================================
+
+
+================================================================================
+Training: DLINEAR
+Category: baseline
+Description: Decomposition + Linear - Simple but VERY effective baseline
+================================================================================
+
+Configuration:
+  Device: cpu
+  Batch size: 128
+  Learning rate: 0.001
+  Max epochs: 100
+  Enhanced features: False
+
+[1/5] Loading data...
+Loading data for splitting from data/train.csv...

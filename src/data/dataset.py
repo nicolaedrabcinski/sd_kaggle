@@ -15,8 +15,8 @@ class CommodityDataset(Dataset):
     
     def __init__(
         self,
-        data_path: str = "data/train.csv",
-        labels_path: str = "data/train_labels.csv",
+        data_path: str,
+        labels_path: str,
         lookback: int = 60,
         feature_scaler: Optional[StandardScaler] = None,
         fit_scalers: bool = True,
@@ -25,9 +25,19 @@ class CommodityDataset(Dataset):
     ):
         self.lookback = lookback
         
-        if use_enhanced:
-            data_path = data_path.replace('.csv', '_enhanced.csv')
-            print(f"Using enhanced data: {data_path}")
+        # Convert to Path and make absolute
+        data_path = Path(data_path)
+        labels_path = Path(labels_path)
+        
+        if not data_path.is_absolute():
+            project_root = Path(__file__).parent.parent.parent
+            data_path = project_root / data_path
+            labels_path = project_root / labels_path
+        
+        if not data_path.exists():
+            raise FileNotFoundError(f"Data file not found: {data_path}")
+        if not labels_path.exists():
+            raise FileNotFoundError(f"Labels file not found: {labels_path}")
         
         # Load full data
         print(f"Loading data from {data_path}...")
@@ -52,8 +62,8 @@ class CommodityDataset(Dataset):
         self.target_cols = [col for col in labels.columns if col.startswith('target_')]
         
         # Handle missing values
-        self.df[self.feature_cols] = self.df[self.feature_cols].fillna(method='ffill').fillna(method='bfill')
-        self.df[self.target_cols] = self.df[self.target_cols].fillna(method='ffill')
+        self.df[self.feature_cols] = self.df[self.feature_cols].ffill().bfill()
+        self.df[self.target_cols] = self.df[self.target_cols].ffill()
         
         # Drop rows with NaN targets
         initial_len = len(self.df)
@@ -130,7 +140,12 @@ class CommodityDataset(Dataset):
         return sequence, target
     
     def save_scalers(self, feature_path: str = "models/feature_scaler.pkl"):
-        Path(feature_path).parent.mkdir(parents=True, exist_ok=True)
+        feature_path = Path(feature_path)
+        if not feature_path.is_absolute():
+            project_root = Path(__file__).parent.parent.parent
+            feature_path = project_root / feature_path
+        
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self.feature_scaler, feature_path)
         print(f"Feature scaler saved to {feature_path}")
 
@@ -145,17 +160,32 @@ def create_dataloaders(
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train/val/test dataloaders with NO DATA LEAKAGE"""
     
-    data_file = "data/train_enhanced.csv" if use_enhanced else "data/train.csv"
+    # Use absolute paths
+    project_root = Path(__file__).parent.parent.parent
+    
+    # Choose data path based on use_enhanced
+    if use_enhanced:
+        data_file = project_root / "data" / "processed" / "train_enhanced.csv"
+        labels_file = project_root / "data" / "raw" / "train_labels.csv"
+    else:
+        data_file = project_root / "data" / "raw" / "train.csv"
+        labels_file = project_root / "data" / "raw" / "train_labels.csv"
+    
+    # Verify files exist
+    if not data_file.exists():
+        raise FileNotFoundError(f"Data file not found: {data_file}")
+    if not labels_file.exists():
+        raise FileNotFoundError(f"Labels file not found: {labels_file}")
     
     # Load data to determine split
     print(f"Loading data for splitting from {data_file}...")
     data = pd.read_csv(data_file)
-    labels = pd.read_csv("data/train_labels.csv")
+    labels = pd.read_csv(labels_file)
     
     # Merge to get valid length
     df = data.merge(labels, on='date_id', how='inner')
     target_cols = [col for col in labels.columns if col.startswith('target_')]
-    df[target_cols] = df[target_cols].fillna(method='ffill')
+    df[target_cols] = df[target_cols].ffill()
     df = df.dropna(subset=target_cols)
     
     # Calculate split indices (TEMPORAL)
@@ -177,8 +207,8 @@ def create_dataloaders(
     print("Creating TRAIN dataset...")
     print("="*80)
     train_dataset = CommodityDataset(
-        data_path=data_file,
-        labels_path="data/train_labels.csv",
+        data_path=str(data_file),
+        labels_path=str(labels_file),
         lookback=lookback,
         feature_scaler=None,
         fit_scalers=True,
@@ -192,8 +222,8 @@ def create_dataloaders(
     print("Creating VAL dataset...")
     print("="*80)
     val_dataset = CommodityDataset(
-        data_path=data_file,
-        labels_path="data/train_labels.csv",
+        data_path=str(data_file),
+        labels_path=str(labels_file),
         lookback=lookback,
         feature_scaler=train_dataset.feature_scaler,
         fit_scalers=False,
@@ -206,8 +236,8 @@ def create_dataloaders(
     print("Creating TEST dataset...")
     print("="*80)
     test_dataset = CommodityDataset(
-        data_path=data_file,
-        labels_path="data/train_labels.csv",
+        data_path=str(data_file),
+        labels_path=str(labels_file),
         lookback=lookback,
         feature_scaler=train_dataset.feature_scaler,
         fit_scalers=False,

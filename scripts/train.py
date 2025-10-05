@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# train_all.py - Universal training script for all models
+# train.py - Universal training script for all models
 
 import torch
 import sys
@@ -435,6 +435,66 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
     return results
 
 
+# def compare_models(models_to_compare=None):
+#     """Compare results from multiple models"""
+    
+#     results_dir = Path('outputs')
+    
+#     if not results_dir.exists():
+#         print("No results found in outputs/")
+#         return
+    
+#     # Load all results
+#     all_results = []
+    
+#     for result_file in results_dir.glob('*_results.json'):
+#         with open(result_file) as f:
+#             data = json.load(f)
+#             all_results.append(data)
+    
+#     if not all_results:
+#         print("No model results found!")
+#         return
+    
+#     # Filter if specific models requested
+#     if models_to_compare:
+#         all_results = [r for r in all_results if r['model_name'] in models_to_compare]
+    
+#     # Sort by R²
+#     all_results.sort(key=lambda x: x['test_metrics']['r2'], reverse=True)
+    
+#     # Print comparison
+#     print("\n" + "="*100)
+#     print("MODEL COMPARISON")
+#     print("="*100)
+#     print(f"{'Model':<20} {'RMSE':<12} {'R²':<10} {'Dir Acc':<10} {'Improve':<10} {'Params':<12} {'Time(m)':<10}")
+#     print("-"*100)
+    
+#     for result in all_results:
+#         name = result['model_name']
+#         rmse = result['test_metrics']['rmse']
+#         r2 = result['test_metrics']['r2']
+#         dir_acc = result['test_metrics']['directional_accuracy']
+#         improve = result['improvement_pct']
+#         params = result['num_parameters']
+#         time_m = result['training_time_seconds'] / 60
+        
+#         print(f"{name:<20} {rmse:<12.6f} {r2:<10.4f} {dir_acc:<10.4f} {improve:>+8.2f}% {params:>10,}  {time_m:>8.1f}")
+    
+#     print("="*100)
+    
+#     # Best models
+#     best_r2 = max(all_results, key=lambda x: x['test_metrics']['r2'])
+#     best_rmse = min(all_results, key=lambda x: x['test_metrics']['rmse'])
+#     fastest = min(all_results, key=lambda x: x['training_time_seconds'])
+    
+#     print("\nBEST MODELS:")
+#     print(f"  Highest R²: {best_r2['model_name']} (R²={best_r2['test_metrics']['r2']:.4f})")
+#     print(f"  Lowest RMSE: {best_rmse['model_name']} (RMSE={best_rmse['test_metrics']['rmse']:.6f})")
+#     print(f"  Fastest: {fastest['model_name']} ({fastest['training_time_seconds']/60:.1f} minutes)")
+#     print("="*100)
+
+
 def compare_models(models_to_compare=None):
     """Compare results from multiple models"""
     
@@ -448,20 +508,32 @@ def compare_models(models_to_compare=None):
     all_results = []
     
     for result_file in results_dir.glob('*_results.json'):
-        with open(result_file) as f:
-            data = json.load(f)
-            all_results.append(data)
+        try:
+            with open(result_file) as f:
+                data = json.load(f)
+                # Validate that required keys exist
+                if 'test_metrics' in data and 'model_name' in data:
+                    all_results.append(data)
+                else:
+                    print(f"Skipping {result_file.name} - invalid format")
+        except Exception as e:
+            print(f"Error loading {result_file.name}: {e}")
+            continue
     
     if not all_results:
-        print("No model results found!")
+        print("No valid model results found!")
         return
     
     # Filter if specific models requested
     if models_to_compare:
         all_results = [r for r in all_results if r['model_name'] in models_to_compare]
     
+    if not all_results:
+        print("No matching models found!")
+        return
+    
     # Sort by R²
-    all_results.sort(key=lambda x: x['test_metrics']['r2'], reverse=True)
+    all_results.sort(key=lambda x: x['test_metrics'].get('r2', 0), reverse=True)
     
     # Print comparison
     print("\n" + "="*100)
@@ -472,28 +544,27 @@ def compare_models(models_to_compare=None):
     
     for result in all_results:
         name = result['model_name']
-        rmse = result['test_metrics']['rmse']
-        r2 = result['test_metrics']['r2']
-        dir_acc = result['test_metrics']['directional_accuracy']
-        improve = result['improvement_pct']
-        params = result['num_parameters']
-        time_m = result['training_time_seconds'] / 60
+        rmse = result['test_metrics'].get('rmse', 0)
+        r2 = result['test_metrics'].get('r2', 0)
+        dir_acc = result['test_metrics'].get('directional_accuracy', 0)
+        improve = result.get('improvement_pct', 0)
+        params = result.get('num_parameters', 0)
+        time_m = result.get('training_time_seconds', 0) / 60
         
         print(f"{name:<20} {rmse:<12.6f} {r2:<10.4f} {dir_acc:<10.4f} {improve:>+8.2f}% {params:>10,}  {time_m:>8.1f}")
     
     print("="*100)
     
     # Best models
-    best_r2 = max(all_results, key=lambda x: x['test_metrics']['r2'])
-    best_rmse = min(all_results, key=lambda x: x['test_metrics']['rmse'])
-    fastest = min(all_results, key=lambda x: x['training_time_seconds'])
+    best_r2 = max(all_results, key=lambda x: x['test_metrics'].get('r2', 0))
+    best_rmse = min(all_results, key=lambda x: x['test_metrics'].get('rmse', float('inf')))
+    fastest = min(all_results, key=lambda x: x.get('training_time_seconds', float('inf')))
     
     print("\nBEST MODELS:")
-    print(f"  Highest R²: {best_r2['model_name']} (R²={best_r2['test_metrics']['r2']:.4f})")
-    print(f"  Lowest RMSE: {best_rmse['model_name']} (RMSE={best_rmse['test_metrics']['rmse']:.6f})")
-    print(f"  Fastest: {fastest['model_name']} ({fastest['training_time_seconds']/60:.1f} minutes)")
+    print(f"  Highest R²: {best_r2['model_name']} (R²={best_r2['test_metrics'].get('r2', 0):.4f})")
+    print(f"  Lowest RMSE: {best_rmse['model_name']} (RMSE={best_rmse['test_metrics'].get('rmse', 0):.6f})")
+    print(f"  Fastest: {fastest['model_name']} ({fastest.get('training_time_seconds', 0)/60:.1f} minutes)")
     print("="*100)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train time series models')
