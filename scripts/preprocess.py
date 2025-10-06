@@ -23,7 +23,7 @@ def preprocess_data(use_minimal: bool = False):
     
     # Process train data
     print("\nProcessing train.csv...")
-    train = pd.read_csv('data/train.csv')
+    train = pd.read_csv('data/raw/train.csv')
     print(f"Original train shape: {train.shape}")
     
     if use_minimal:
@@ -40,7 +40,7 @@ def preprocess_data(use_minimal: bool = False):
     
     # Process test data
     print("\nProcessing test.csv...")
-    test = pd.read_csv('data/test.csv')
+    test = pd.read_csv('data/raw/test.csv')
     print(f"Original test shape: {test.shape}")
     
     if use_minimal:

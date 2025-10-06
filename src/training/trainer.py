@@ -10,6 +10,11 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
+# Import custom loss
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
+from training.losses import DirectionalLoss
+
 
 class Trainer:
     """Trainer for commodity prediction models with progress tracking"""
@@ -22,15 +27,22 @@ class Trainer:
         device: str = 'cuda',
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-5,
-        save_dir: str = 'models/checkpoints'
+        save_dir: str = 'models/checkpoints',
+        use_directional_loss: bool = True,
+        directional_alpha: float = 0.3
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
         
-        # Loss (Huber - robust to outliers)
-        self.criterion = nn.HuberLoss(delta=1.0)
+        # Loss function - DIRECTIONAL LOSS for pair trading
+        if use_directional_loss:
+            self.criterion = DirectionalLoss(alpha=directional_alpha)
+            print(f"Using DirectionalLoss (alpha={directional_alpha}: {int(directional_alpha*100)}% direction, {int((1-directional_alpha)*100)}% MSE)")
+        else:
+            self.criterion = nn.HuberLoss(delta=1.0)
+            print("Using HuberLoss")
         
         # Optimizer
         self.optimizer = optim.Adam(
@@ -132,11 +144,15 @@ class Trainer:
         ss_tot = np.sum((all_targets - np.mean(all_targets)) ** 2)
         r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
         
+        # CRITICAL: Directional accuracy
+        dir_acc = np.mean(np.sign(all_predictions) == np.sign(all_targets))
+        
         return {
             'loss': total_loss / len(self.val_loader),
             'rmse': rmse,
             'mae': mae,
-            'r2': r2
+            'r2': r2,
+            'directional_accuracy': dir_acc
         }
     
     def train(
@@ -184,6 +200,7 @@ class Trainer:
                 'train_loss': f'{train_loss:.6f}',
                 'val_loss': f'{val_metrics["loss"]:.6f}',
                 'val_r2': f'{val_metrics["r2"]:.4f}',
+                'dir_acc': f'{val_metrics["directional_accuracy"]:.4f}',
                 'lr': f'{current_lr:.2e}',
                 'time': f'{epoch_time:.1f}s'
             })
@@ -196,11 +213,12 @@ class Trainer:
             print(f"  Val RMSE:   {val_metrics['rmse']:.6f}")
             print(f"  Val MAE:    {val_metrics['mae']:.6f}")
             print(f"  Val R²:     {val_metrics['r2']:.4f}")
+            print(f"  Dir Acc:    {val_metrics['directional_accuracy']:.4f} ({val_metrics['directional_accuracy']*100:.1f}%)")
             print(f"  LR:         {current_lr:.6f}")
             print(f"  Time:       {epoch_time:.2f}s")
             
             if new_lr != old_lr:
-                print(f"  📉 LR reduced: {old_lr:.6f} -> {new_lr:.6f}")
+                print(f"  LR reduced: {old_lr:.6f} -> {new_lr:.6f}")
             
             # Check for improvement
             if val_metrics['loss'] < self.best_val_loss:
@@ -215,16 +233,16 @@ class Trainer:
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'val_metrics': val_metrics
                     }, save_path)
-                    print(f"  ✓ New best model saved!")
+                    print(f"  New best model saved!")
             else:
                 patience_counter += 1
-                print(f"  ⏳ No improvement for {patience_counter}/{early_stopping_patience} epochs")
+                print(f"  No improvement for {patience_counter}/{early_stopping_patience} epochs")
             
             print("=" * 80)
             
             # Early stopping
             if patience_counter >= early_stopping_patience:
-                print(f"\n🛑 Early stopping triggered at epoch {epoch}")
+                print(f"\nEarly stopping triggered at epoch {epoch}")
                 break
         
         epoch_pbar.close()
@@ -239,5 +257,5 @@ class Trainer:
         checkpoint_path = self.save_dir / 'best_model.pth'
         checkpoint = torch.load(checkpoint_path, weights_only=False)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"✓ Loaded best model from epoch {checkpoint['epoch']}")
+        print(f"Loaded best model from epoch {checkpoint['epoch']}")
         return checkpoint['val_metrics']

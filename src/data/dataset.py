@@ -47,39 +47,52 @@ class CommodityDataset(Dataset):
         print(f"Full data shape: {data.shape}")
         print(f"Full labels shape: {labels.shape}")
         
-        # CRITICAL FIX: Filter by indices BEFORE merging
-        if indices is not None:
-            print(f"Filtering to {len(indices)} indices...")
-            data = data.iloc[indices].reset_index(drop=True)
-            labels = labels.iloc[indices].reset_index(drop=True)
-        
-        # Now merge only the filtered data
+        # CRITICAL FIX: Merge FIRST, then filter by indices
         self.df = data.merge(labels, on='date_id', how='inner')
-        print(f"Merged data shape: {self.df.shape}")
+        print(f"After merge: {self.df.shape}")
         
         # Get columns
-        self.feature_cols = [col for col in data.columns if col != 'date_id']
-        self.target_cols = [col for col in labels.columns if col.startswith('target_')]
+        feature_cols_temp = [col for col in data.columns if col != 'date_id']
+        target_cols_temp = [col for col in labels.columns if col.startswith('target_')]
         
-        # Handle missing values in features ONLY
-        self.df[self.feature_cols] = self.df[self.feature_cols].ffill().bfill()
-        
-        # CRITICAL: DO NOT ffill targets - drop rows with NaN targets instead
+        # Drop NaN targets
         initial_len = len(self.df)
-        self.df = self.df.dropna(subset=self.target_cols)
+        self.df = self.df.dropna(subset=target_cols_temp)
         if len(self.df) < initial_len:
-            dropped = initial_len - len(self.df)
-            print(f"Dropped {dropped} rows with NaN targets ({dropped/initial_len*100:.1f}%)")
+            print(f"Dropped {initial_len - len(self.df)} rows with NaN targets")
+        
+        # NOW apply indices AFTER merge and cleaning
+        if indices is not None:
+            print(f"Filtering to indices {indices[0]}-{indices[-1]} ({len(indices)} samples)...")
+            self.df = self.df.iloc[indices].reset_index(drop=True)
+            print(f"After filtering: {self.df.shape}")
+        
+        # Get final columns
+        self.feature_cols = [col for col in self.df.columns if col not in target_cols_temp and col != 'date_id']
+        self.target_cols = [col for col in self.df.columns if col.startswith('target_')]
+        
+        # Handle missing values in features
+        if len(self.df) > 0:
+            self.df[self.feature_cols] = self.df[self.feature_cols].ffill().bfill()
         
         print(f"Final data shape: {self.df.shape}")
         print(f"Features: {len(self.feature_cols)}")
         print(f"Targets: {len(self.target_cols)}")
         
+        if len(self.df) == 0:
+            print("WARNING: Dataset is empty after filtering!")
+            self.features = np.array([]).reshape(0, len(self.feature_cols)).astype(np.float32)
+            self.targets = np.array([]).reshape(0, len(self.target_cols)).astype(np.float32)
+            self.feature_scaler = StandardScaler()
+            self.sequences = np.array([]).reshape(0, lookback, len(self.feature_cols)).astype(np.float32)
+            self.sequence_targets = np.array([]).reshape(0, len(self.target_cols)).astype(np.float32)
+            return
+        
         # Extract arrays
         self.features = self.df[self.feature_cols].values.astype(np.float32)
         self.targets = self.df[self.target_cols].values.astype(np.float32)
         
-        # Replace inf/nan in features only
+        # Replace inf/nan in features
         self.features = np.nan_to_num(self.features, nan=0.0, posinf=1e10, neginf=-1e10)
         
         # Normalize features
@@ -93,30 +106,23 @@ class CommodityDataset(Dataset):
             self.features = self.feature_scaler.transform(self.features)
             print(f"Features transformed using provided scaler")
         
-        # DON'T normalize targets - they are log returns
-        self.target_scaler = None
+        # Target statistics
         print(f"\nTarget statistics (raw log returns):")
         print(f"  Range: [{self.targets.min():.6f}, {self.targets.max():.6f}]")
         print(f"  Mean: {self.targets.mean():.6f}")
         print(f"  Std: {self.targets.std():.6f}")
         print(f"  Median: {np.median(self.targets):.6f}")
         
-        # Check if targets look reasonable
-        if abs(self.targets.mean()) > 0.01:
-            print(f"  WARNING: Mean target is large ({self.targets.mean():.6f}), expected ~0")
-        if self.targets.std() > 0.1:
-            print(f"  WARNING: Std is large ({self.targets.std():.6f}), expected < 0.05")
-        
         # Create sequences
         self.sequences, self.sequence_targets = self._create_sequences()
         print(f"Created {len(self.sequences)} sequences")
         
-        # Validation
-        assert not np.any(np.isnan(self.sequences)), "NaN in sequences!"
-        assert not np.any(np.isnan(self.sequence_targets)), "NaN in targets!"
-        assert not np.any(np.isinf(self.sequences)), "Inf in sequences!"
-        assert not np.any(np.isinf(self.sequence_targets)), "Inf in targets!"
-        print("Data validation passed")
+        if len(self.sequences) > 0:
+            assert not np.any(np.isnan(self.sequences)), "NaN in sequences!"
+            assert not np.any(np.isnan(self.sequence_targets)), "NaN in targets!"
+            assert not np.any(np.isinf(self.sequences)), "Inf in sequences!"
+            assert not np.any(np.isinf(self.sequence_targets)), "Inf in targets!"
+            print("Data validation passed")
     
     def _create_sequences(self) -> Tuple[np.ndarray, np.ndarray]:
         sequences = []
@@ -127,6 +133,10 @@ class CommodityDataset(Dataset):
             target = self.targets[i]
             sequences.append(seq)
             targets.append(target)
+        
+        if len(sequences) == 0:
+            return np.array([], dtype=np.float32).reshape(0, self.lookback, len(self.feature_cols)), \
+                   np.array([], dtype=np.float32).reshape(0, len(self.target_cols))
         
         return np.array(sequences, dtype=np.float32), np.array(targets, dtype=np.float32)
     
@@ -155,44 +165,48 @@ def create_dataloaders(
     batch_size: int = 32,
     lookback: int = 60,
     num_workers: int = 4,
-    use_enhanced: bool = False
+    use_enhanced: bool = False,
+    use_forward_returns: bool = False
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train/val/test dataloaders with NO DATA LEAKAGE"""
     
-    # Use absolute paths
     project_root = Path(__file__).parent.parent.parent
     
-    # Choose data path based on use_enhanced
-    if use_enhanced:
+    # Choose data path
+    if use_forward_returns:
+        data_file = project_root / "data" / "processed" / "train_forward_returns.csv"
+        labels_file = project_root / "data" / "raw" / "train_labels.csv"
+        print("Using forward returns features")
+    elif use_enhanced:
         data_file = project_root / "data" / "processed" / "train_enhanced.csv"
         labels_file = project_root / "data" / "raw" / "train_labels.csv"
+        print("Using enhanced features")
     else:
         data_file = project_root / "data" / "raw" / "train.csv"
         labels_file = project_root / "data" / "raw" / "train_labels.csv"
+        print("Using raw features")
     
-    # Verify files exist
     if not data_file.exists():
         raise FileNotFoundError(f"Data file not found: {data_file}")
     if not labels_file.exists():
         raise FileNotFoundError(f"Labels file not found: {labels_file}")
     
-    # Load data to determine split
+    # Load and merge data
     print(f"Loading data for splitting from {data_file}...")
     data = pd.read_csv(data_file)
     labels = pd.read_csv(labels_file)
     
-    # Merge to get valid length
     df = data.merge(labels, on='date_id', how='inner')
     target_cols = [col for col in labels.columns if col.startswith('target_')]
     
-    # CRITICAL: Drop rows with NaN targets BEFORE splitting
+    # Drop NaN targets
     initial_len = len(df)
     df = df.dropna(subset=target_cols)
     dropped = initial_len - len(df)
     if dropped > 0:
         print(f"Dropped {dropped} rows with NaN targets ({dropped/initial_len*100:.1f}%)")
     
-    # Calculate split indices (TEMPORAL)
+    # Calculate split indices on MERGED data
     total_len = len(df)
     train_size = int(total_len * train_ratio)
     val_size = int(total_len * val_ratio)
@@ -203,11 +217,12 @@ def create_dataloaders(
     
     print(f"\nDataset splits (TEMPORAL):")
     print(f"Total clean samples: {total_len}")
-    print(f"Train: {len(train_indices)} samples ({train_ratio*100:.1f}%)")
-    print(f"Val: {len(val_indices)} samples ({val_ratio*100:.1f}%)")
-    print(f"Test: {len(test_indices)} samples ({(1-train_ratio-val_ratio)*100:.1f}%)")
+    print(f"Train: {len(train_indices)} samples (indices {train_indices[0]}-{train_indices[-1]})")
+    print(f"Val: {len(val_indices)} samples (indices {val_indices[0]}-{val_indices[-1]})")
+    print(f"Test: {len(test_indices)} samples (indices {test_indices[0]}-{test_indices[-1]})")
+    print(f"Note: After lookback={lookback}, each split will have ~{lookback} fewer sequences")
     
-    # Create TRAIN dataset - fit scalers ONLY on train
+    # Create datasets
     print("\n" + "="*80)
     print("Creating TRAIN dataset...")
     print("="*80)
@@ -220,9 +235,12 @@ def create_dataloaders(
         indices=train_indices,
         use_enhanced=use_enhanced
     )
+    
+    if len(train_dataset) == 0:
+        raise ValueError("Train dataset is empty!")
+    
     train_dataset.save_scalers()
     
-    # Create VAL dataset - use train scalers
     print("\n" + "="*80)
     print("Creating VAL dataset...")
     print("="*80)
@@ -236,7 +254,9 @@ def create_dataloaders(
         use_enhanced=use_enhanced
     )
     
-    # Create TEST dataset - use train scalers
+    if len(val_dataset) == 0:
+        raise ValueError("Val dataset is empty!")
+    
     print("\n" + "="*80)
     print("Creating TEST dataset...")
     print("="*80)
@@ -250,29 +270,15 @@ def create_dataloaders(
         use_enhanced=use_enhanced
     )
     
-    # Create dataloaders (NO SHUFFLE for temporal data)
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    if len(test_dataset) == 0:
+        raise ValueError("Test dataset is empty!")
     
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    # Create dataloaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, 
+                             num_workers=num_workers, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
+                           num_workers=num_workers, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True)
     
     return train_loader, val_loader, test_loader

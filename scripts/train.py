@@ -30,7 +30,7 @@ MODEL_REGISTRY = {
     'dlinear': {
         'class': DLinear,
         'params': {'moving_avg': 25, 'individual': True},
-        'batch_size': 128,
+        'batch_size': 32,
         'lr': 1e-3,
         'category': 'baseline',
         'description': 'Decomposition + Linear - Simple but VERY effective baseline'
@@ -38,7 +38,7 @@ MODEL_REGISTRY = {
     'nlinear': {
         'class': NLinear,
         'params': {'individual': True},
-        'batch_size': 128,
+        'batch_size': 32,
         'lr': 1e-3,
         'category': 'baseline',
         'description': 'Normalized Linear - Handles distribution shift'
@@ -46,7 +46,7 @@ MODEL_REGISTRY = {
     'rlinear': {
         'class': RLinear,
         'params': {'individual': True},
-        'batch_size': 128,
+        'batch_size': 32,
         'lr': 1e-3,
         'category': 'baseline',
         'description': 'RevIN + Linear - Best for non-stationary series'
@@ -137,14 +137,6 @@ MODEL_REGISTRY = {
         'category': 'advanced',
         'description': 'N-BEATS - Interpretable basis functions (trend+seasonal)'
     },
-    'timesnet': {
-        'class': TimesNet,
-        'params': {'d_model': 64, 'd_ff': 128, 'num_blocks': 2, 'top_k': 3, 'dropout': 0.1},
-        'batch_size': 64,
-        'lr': 5e-4,
-        'category': 'advanced',
-        'description': 'TimesNet - 2D variation modeling, multi-periodicity'
-    },
     'autoformer': {
         'class': AutoFormer,
         'params': {'d_model': 128, 'n_heads': 8, 'n_layers': 2, 'moving_avg': 25, 'dropout': 0.1},
@@ -224,7 +216,7 @@ def list_models(category=None):
     print("="*80)
 
 
-def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
+def train_model(model_name, use_enhanced=False, use_forward=False, epochs=100, patience=15, lookback=60):
     """Train a specific model"""
     
     if model_name not in MODEL_REGISTRY:
@@ -245,10 +237,11 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
         'model_name': model_name,
         'input_size': None,
         'num_targets': 424,
-        'lookback': 60,
+        'lookback': lookback,
         'train_ratio': 0.7,
         'val_ratio': 0.15,
         'use_enhanced': use_enhanced,
+        'use_forward': use_forward,
         'batch_size': config['batch_size'],
         'learning_rate': config['lr'],
         'weight_decay': 1e-5,
@@ -263,7 +256,9 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
     print(f"  Batch size: {CONFIG['batch_size']}")
     print(f"  Learning rate: {CONFIG['learning_rate']}")
     print(f"  Max epochs: {CONFIG['num_epochs']}")
+    print(f"  Lookback: {CONFIG['lookback']}")
     print(f"  Enhanced features: {use_enhanced}")
+    print(f"  Forward returns features: {use_forward}")
     
     # Load data
     print("\n[1/5] Loading data...")
@@ -273,7 +268,8 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
         batch_size=CONFIG['batch_size'],
         lookback=CONFIG['lookback'],
         num_workers=CONFIG['num_workers'],
-        use_enhanced=use_enhanced
+        use_enhanced=use_enhanced,
+        use_forward_returns=use_forward
     )
     
     # Get dimensions
@@ -425,7 +421,8 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
     }
     
     Path('outputs').mkdir(exist_ok=True)
-    output_file = f'outputs/{model_name}_results.json'
+    suffix = '_forward' if use_forward else ('_enhanced' if use_enhanced else '')
+    output_file = f'outputs/{model_name}{suffix}_results.json'
     
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)
@@ -433,66 +430,6 @@ def train_model(model_name, use_enhanced=True, epochs=100, patience=15):
     print(f"\nResults saved to: {output_file}")
     
     return results
-
-
-# def compare_models(models_to_compare=None):
-#     """Compare results from multiple models"""
-    
-#     results_dir = Path('outputs')
-    
-#     if not results_dir.exists():
-#         print("No results found in outputs/")
-#         return
-    
-#     # Load all results
-#     all_results = []
-    
-#     for result_file in results_dir.glob('*_results.json'):
-#         with open(result_file) as f:
-#             data = json.load(f)
-#             all_results.append(data)
-    
-#     if not all_results:
-#         print("No model results found!")
-#         return
-    
-#     # Filter if specific models requested
-#     if models_to_compare:
-#         all_results = [r for r in all_results if r['model_name'] in models_to_compare]
-    
-#     # Sort by R²
-#     all_results.sort(key=lambda x: x['test_metrics']['r2'], reverse=True)
-    
-#     # Print comparison
-#     print("\n" + "="*100)
-#     print("MODEL COMPARISON")
-#     print("="*100)
-#     print(f"{'Model':<20} {'RMSE':<12} {'R²':<10} {'Dir Acc':<10} {'Improve':<10} {'Params':<12} {'Time(m)':<10}")
-#     print("-"*100)
-    
-#     for result in all_results:
-#         name = result['model_name']
-#         rmse = result['test_metrics']['rmse']
-#         r2 = result['test_metrics']['r2']
-#         dir_acc = result['test_metrics']['directional_accuracy']
-#         improve = result['improvement_pct']
-#         params = result['num_parameters']
-#         time_m = result['training_time_seconds'] / 60
-        
-#         print(f"{name:<20} {rmse:<12.6f} {r2:<10.4f} {dir_acc:<10.4f} {improve:>+8.2f}% {params:>10,}  {time_m:>8.1f}")
-    
-#     print("="*100)
-    
-#     # Best models
-#     best_r2 = max(all_results, key=lambda x: x['test_metrics']['r2'])
-#     best_rmse = min(all_results, key=lambda x: x['test_metrics']['rmse'])
-#     fastest = min(all_results, key=lambda x: x['training_time_seconds'])
-    
-#     print("\nBEST MODELS:")
-#     print(f"  Highest R²: {best_r2['model_name']} (R²={best_r2['test_metrics']['r2']:.4f})")
-#     print(f"  Lowest RMSE: {best_rmse['model_name']} (RMSE={best_rmse['test_metrics']['rmse']:.6f})")
-#     print(f"  Fastest: {fastest['model_name']} ({fastest['training_time_seconds']/60:.1f} minutes)")
-#     print("="*100)
 
 
 def compare_models(models_to_compare=None):
@@ -511,7 +448,6 @@ def compare_models(models_to_compare=None):
         try:
             with open(result_file) as f:
                 data = json.load(f)
-                # Validate that required keys exist
                 if 'test_metrics' in data and 'model_name' in data:
                     all_results.append(data)
                 else:
@@ -524,7 +460,6 @@ def compare_models(models_to_compare=None):
         print("No valid model results found!")
         return
     
-    # Filter if specific models requested
     if models_to_compare:
         all_results = [r for r in all_results if r['model_name'] in models_to_compare]
     
@@ -533,7 +468,7 @@ def compare_models(models_to_compare=None):
         return
     
     # Sort by R²
-    all_results.sort(key=lambda x: x['test_metrics'].get('r2', 0), reverse=True)
+    all_results.sort(key=lambda x: x['test_metrics'].get('r2', -999), reverse=True)
     
     # Print comparison
     print("\n" + "="*100)
@@ -556,7 +491,7 @@ def compare_models(models_to_compare=None):
     print("="*100)
     
     # Best models
-    best_r2 = max(all_results, key=lambda x: x['test_metrics'].get('r2', 0))
+    best_r2 = max(all_results, key=lambda x: x['test_metrics'].get('r2', -999))
     best_rmse = min(all_results, key=lambda x: x['test_metrics'].get('rmse', float('inf')))
     fastest = min(all_results, key=lambda x: x.get('training_time_seconds', float('inf')))
     
@@ -566,6 +501,7 @@ def compare_models(models_to_compare=None):
     print(f"  Fastest: {fastest['model_name']} ({fastest.get('training_time_seconds', 0)/60:.1f} minutes)")
     print("="*100)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train time series models')
     
@@ -574,8 +510,10 @@ if __name__ == "__main__":
     parser.add_argument('--category', type=str, help='List models in category')
     parser.add_argument('--compare', action='store_true', help='Compare all trained models')
     parser.add_argument('--enhanced', action='store_true', help='Use enhanced features')
+    parser.add_argument('--forward', action='store_true', help='Use forward returns features')
     parser.add_argument('--epochs', type=int, default=100, help='Max epochs')
     parser.add_argument('--patience', type=int, default=15, help='Early stopping patience')
+    parser.add_argument('--lookback', type=int, default=60, help='Lookback window size')
     parser.add_argument('--all', action='store_true', help='Train all models sequentially')
     
     args = parser.parse_args()
@@ -587,23 +525,22 @@ if __name__ == "__main__":
     elif args.compare:
         compare_models()
     elif args.all:
-        # Train all models
         print("Training ALL models sequentially...")
         for model_name in MODEL_REGISTRY.keys():
             print(f"\n\n{'='*80}")
             print(f"Starting: {model_name}")
             print(f"{'='*80}\n")
-            train_model(model_name, args.enhanced, args.epochs, args.patience)
+            train_model(model_name, args.enhanced, args.forward, args.epochs, args.patience, args.lookback)
         
-        # Compare at the end
         print("\n\nFinal comparison:")
         compare_models()
     elif args.model:
-        train_model(args.model, args.enhanced, args.epochs, args.patience)
+        train_model(args.model, args.enhanced, args.forward, args.epochs, args.patience, args.lookback)
     else:
         print("Usage:")
-        print("  python train_all.py --list                    # List all models")
-        print("  python train_all.py --model dlinear           # Train DLinear")
-        print("  python train_all.py --model patchtst --enhanced  # Train with enhanced features")
-        print("  python train_all.py --all                     # Train all models")
-        print("  python train_all.py --compare                 # Compare results")
+        print("  python train.py --list                        # List all models")
+        print("  python train.py --model dlinear               # Train DLinear")
+        print("  python train.py --model dlinear --forward     # Train with forward returns")
+        print("  python train.py --model dlinear --lookback 30 # Custom lookback")
+        print("  python train.py --all --forward               # Train all with forward returns")
+        print("  python train.py --compare                     # Compare results")

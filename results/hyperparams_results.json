@@ -1,0 +1,128 @@
+{
+    "dlinear": {
+        "category": "baseline",
+        "description": "Decomposition + Linear - Simple but VERY effective baseline",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:17.895795"
+    },
+    "nlinear": {
+        "category": "baseline",
+        "description": "Normalized Linear - Handles distribution shift",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:17.931123"
+    },
+    "rlinear": {
+        "category": "baseline",
+        "description": "RevIN + Linear - Best for non-stationary series",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:17.966956"
+    },
+    "fits": {
+        "category": "baseline",
+        "description": "Frequency Interpolation - Ultra simple FFT-based",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:17.975764"
+    },
+    "cnn_attention": {
+        "category": "cnn",
+        "description": "Multi-scale CNN + Attention - Fast and effective",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.005102"
+    },
+    "wavenet": {
+        "category": "cnn",
+        "description": "Dilated causal convolutions - Long-range dependencies",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.067102"
+    },
+    "patchtst": {
+        "category": "transformer",
+        "description": "PatchTST - Best Transformer for time series (RECOMMENDED)",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.125936"
+    },
+    "patchtst_ci": {
+        "category": "transformer",
+        "description": "PatchTST with Channel Independence - For many variables",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.181720"
+    },
+    "ft_transformer": {
+        "category": "transformer",
+        "description": "Feature Tokenizer - Each feature as token",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.184334"
+    },
+    "performer": {
+        "category": "transformer",
+        "description": "Performer - Linear attention, efficient",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.308315"
+    },
+    "crossformer": {
+        "category": "transformer",
+        "description": "CrossFormer - Cross-dimension dependencies",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.366291"
+    },
+    "nhits": {
+        "category": "advanced",
+        "description": "N-HiTS - Hierarchical interpolation, SOTA forecasting",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.468676"
+    },
+    "nbeats": {
+        "category": "advanced",
+        "description": "N-BEATS - Interpretable basis functions (trend+seasonal)",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.577848"
+    },
+    "autoformer": {
+        "category": "advanced",
+        "description": "Autoformer - Auto-correlation + decomposition",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.609026"
+    },
+    "fedformer": {
+        "category": "advanced",
+        "description": "FEDformer - Frequency enhanced, efficient",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.695579"
+    },
+    "tabnet": {
+        "category": "tabular",
+        "description": "TabNet - Attentive interpretable, best for tabular",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.770167"
+    },
+    "residual_mlp": {
+        "category": "tabular",
+        "description": "Deep MLP with residuals - Simple baseline",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:18.873720"
+    },
+    "xgboost_nn": {
+        "category": "tabular",
+        "description": "Neural network mimicking XGBoost",
+        "best_params": null,
+        "best_score": Infinity,
+        "timestamp": "2025-10-06T13:45:19.077245"
+    }
+}
