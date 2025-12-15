@@ -1,2 +1,0 @@
-https://www.kaggle.com/code/abhinavsharma0706/mitsui-co-prediction-01
-Here is example how to do it

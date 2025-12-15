@@ -1,0 +1,80 @@
+# Default configuration for Mitsui Commodity Prediction Challenge
+
+# Data paths
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  train_features: "data/processed/train_features_v2.csv"
+  test_features: "data/processed/test_features_v2.csv"
+
+# Data processing
+preprocessing:
+  lookback: 60  # Temporal window size
+  train_ratio: 0.7  # 70% for training
+  val_ratio: 0.15  # 15% for validation (15% for test)
+
+  # Feature engineering
+  use_lagged_targets: true
+  lag_range: [1, 2, 3, 4]  # Lags to create
+
+  # Technical indicators
+  use_technical_indicators: true
+  moving_averages: [5, 10, 20, 50]
+  rsi_period: 14
+  bollinger_period: 20
+
+# Training
+training:
+  num_epochs: 100
+  early_stopping_patience: 15
+  batch_size: 64  # Default, can be overridden per model
+  num_workers: 4
+
+  # Loss function
+  loss_type: "mitsui"  # Options: mitsui, spearman, directional
+  spearman_weight: 0.7  # For mitsui loss
+
+  # Optimizer
+  learning_rate: 0.0005
+  weight_decay: 0.00001
+
+  # Learning rate scheduler
+  scheduler:
+    type: "ReduceLROnPlateau"
+    mode: "min"
+    factor: 0.5
+    patience: 5
+
+  # Gradient clipping
+  gradient_clip_val: 1.0
+
+# Model checkpoints
+checkpoints:
+  save_dir: "models/checkpoints"
+  save_best: true
+  monitor: "spearman_mean"  # Metric to monitor
+  mode: "max"  # Maximize Spearman correlation
+
+# Outputs
+outputs:
+  results_dir: "outputs"
+  submissions_dir: "submissions"
+  logs_dir: "logs"
+
+# Experiment tracking
+experiment:
+  use_wandb: false  # Set to true to enable WandB logging
+  project_name: "mitsui-commodity-prediction"
+  run_name: null  # Auto-generated if null
+
+# Hardware
+device: "cuda"  # Options: cuda, cpu, mps (for Mac M1/M2)
+seed: 42  # Random seed for reproducibility
+
+# Hyperparameter search (Optuna)
+optuna:
+  n_trials: 100
+  timeout: null  # Time limit in seconds (null = no limit)
+  direction: "maximize"  # Maximize Spearman correlation
+  study_name: null  # Auto-generated if null
+  storage: null  # SQLite database path (null = in-memory)

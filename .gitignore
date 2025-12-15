@@ -24,7 +24,7 @@ wheels/
 venv/
 env/
 ENV/
-.venv
+.venv/
 
 # IDEs
 .vscode/
@@ -48,7 +48,11 @@ ENV/
 models/**/*.pth
 models/**/*.pt
 models/**/*.pkl
+models/**/*.ckpt
 !models/.gitkeep
+
+# Model checkpoints archive
+models_checkpoints.zip
 
 # Outputs
 outputs/**/*
@@ -57,7 +61,10 @@ outputs/**/*
 # Logs
 logs/
 *.log
+
+# Wandb
 wandb/
+.wandb/
 
 # Testing
 .pytest_cache/
@@ -83,5 +90,23 @@ dmypy.json
 *.tmp
 *.bak
 .cache/
+
 # Kaggle evaluation files
+data/raw/kaggle_evaluation/
 data/external/
+
+# Notebook artifacts (shouldn't be in git)
+notebooks/*.joblib
+notebooks/*.parquet
+notebooks/*.pkl
+notebooks/*.log
+notebooks/*.py
+notebooks/optuna_visualizations/
+
+# Results and submissions
+submissions/*.parquet
+submissions/*.csv
+results/*.json
+
+# Large processed data (regenerated from scripts)
+data/processed/*.csv
